@@ -26,12 +26,13 @@
   },
   "scripts": {
     "pre-release": "npm run verify",
-    "semantic-release": "semantic-release",
-    "test": "mocha test/**/*.spec.js test/*.spec.js --ui bdd",
+    "test": "mocha test/*/*/*.spec.js test/*/*.spec.js test/*.spec.js",
     "verify": "eslint src/**/*.js test/**/*.js bin/**/*.js"
   },
   "release": {
-    "verifyConditions": "condition-circle"
+    "verifyConditions": "condition-circle",
+    "branch": "master",
+    "branches": ["master"]
   },
   "husky": {
     "hooks": {
