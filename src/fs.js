@@ -33,6 +33,12 @@ class FileSystem {
     const fsPath = nodePath.resolve(nodePath.join(this.root, joinedPath)
       .replace(UNIX_SEP_REGEX, nodePath.sep)
       .replace(WIN_SEP_REGEX, nodePath.sep));
+    if (existsSync(fsPath)) {
+      let realPath = realpathSync(fsPath)
+      if (!realPath.startsWith(this.root)) {
+        throw new errors.FileSystemError('Not a valid directory')
+      }
+    }
 
     // Create FTP client path using unix separator
     const clientPath = joinedPath.replace(WIN_SEP_REGEX, '/');
@@ -50,36 +56,36 @@ class FileSystem {
   get(fileName) {
     const {fsPath} = this._resolvePath(fileName);
     return fsAsync.stat(fsPath)
-    .then((stat) => _.set(stat, 'name', fileName));
+      .then((stat) => _.set(stat, 'name', fileName));
   }
 
   list(path = '.') {
     const {fsPath} = this._resolvePath(path);
     return fsAsync.readdir(fsPath)
-    .then((fileNames) => {
-      return Promise.map(fileNames, (fileName) => {
-        const filePath = nodePath.join(fsPath, fileName);
-        return fsAsync.access(filePath, constants.F_OK)
-        .then(() => {
-          return fsAsync.stat(filePath)
-          .then((stat) => _.set(stat, 'name', fileName));
-        })
-        .catch(() => null);
-      });
-    })
-    .then(_.compact);
+      .then((fileNames) => {
+        return Promise.map(fileNames, (fileName) => {
+          const filePath = nodePath.join(fsPath, fileName);
+          return fsAsync.access(filePath, constants.F_OK)
+            .then(() => {
+              return fsAsync.stat(filePath)
+                .then((stat) => _.set(stat, 'name', fileName));
+            })
+            .catch(() => null);
+        });
+      })
+      .then(_.compact);
   }
 
   chdir(path = '.') {
     const {fsPath, clientPath} = this._resolvePath(path);
     return fsAsync.stat(fsPath)
-    .tap((stat) => {
-      if (!stat.isDirectory()) throw new errors.FileSystemError('Not a valid directory');
-    })
-    .then(() => {
-      this.cwd = clientPath;
-      return this.currentDirectory();
-    });
+      .tap((stat) => {
+        if (!stat.isDirectory()) throw new errors.FileSystemError('Not a valid directory');
+      })
+      .then(() => {
+        this.cwd = clientPath;
+        return this.currentDirectory();
+      });
   }
 
   write(fileName, {append = false, start = undefined} = {}) {
@@ -96,25 +102,25 @@ class FileSystem {
   read(fileName, {start = undefined} = {}) {
     const {fsPath, clientPath} = this._resolvePath(fileName);
     return fsAsync.stat(fsPath)
-    .tap((stat) => {
-      if (stat.isDirectory()) throw new errors.FileSystemError('Cannot read a directory');
-    })
-    .then(() => {
-      const stream = createReadStream(fsPath, {flags: 'r', start});
-      return {
-        stream,
-        clientPath
-      };
-    });
+      .tap((stat) => {
+        if (stat.isDirectory()) throw new errors.FileSystemError('Cannot read a directory');
+      })
+      .then(() => {
+        const stream = createReadStream(fsPath, {flags: 'r', start});
+        return {
+          stream,
+          clientPath
+        };
+      });
   }
 
   delete(path) {
     const {fsPath} = this._resolvePath(path);
     return fsAsync.stat(fsPath)
-    .then((stat) => {
-      if (stat.isDirectory()) return fsAsync.rmdir(fsPath);
-      else return fsAsync.unlink(fsPath);
-    });
+      .then((stat) => {
+        if (stat.isDirectory()) return fsAsync.rmdir(fsPath);
+        else return fsAsync.unlink(fsPath);
+      });
   }
 
   mkdir(path) {
@@ -138,4 +144,5 @@ class FileSystem {
     return uuid.v4().replace(/\W/g, '');
   }
 }
+
 module.exports = FileSystem;
