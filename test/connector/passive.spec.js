@@ -116,7 +116,7 @@ describe('Connector - Passive //', function () {
   });
 
   it('refuses connection with different remote address', function (done) {
-    sandbox.stub(mockConnection.commandSocket, 'remoteAddress').value('bad');
+    sandbox.stub(mockConnection.commandSocket, 'remoteAddress').value('::2');
 
     let passive = new PassiveConnector(mockConnection);
     passive.setupServer()
@@ -145,7 +145,7 @@ describe('Connector - Passive //', function () {
       expect(passive.dataServer).to.exist;
 
       const {port} = passive.dataServer.address();
-      net.createConnection(port);
+      net.createConnection(port, host);
       return passive.waitForConnection();
     })
     .then(() => {

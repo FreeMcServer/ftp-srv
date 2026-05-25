@@ -1,6 +1,6 @@
 const net = require('net');
 const tls = require('tls');
-const ip = require('ip');
+const ip = require('neoip');
 const Promise = require('bluebird');
 
 const Connector = require('./base');
@@ -44,7 +44,7 @@ class Passive extends Connector {
 
           socket.destroy();
           return this.connection.reply(550, 'Remote addresses do not match')
-          .finally(() => this.connection.close());
+          .then(() => this.connection.close());
         }
         clearTimeout(idleServerTimeout);
 

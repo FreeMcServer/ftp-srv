@@ -24,7 +24,8 @@ class FtpServer extends EventEmitter {
       whitelist: [],
       greeting: null,
       tls: false,
-      timeout: 0
+      timeout: 0,
+      endOnProcessSignal: true,
     }, options);
 
     this._greeting = this.setupGreeting(this.options.greeting);
@@ -49,23 +50,32 @@ class FtpServer extends EventEmitter {
       this.connections[connection.id] = connection;
 
       socket.on('close', () => this.disconnectClient(connection.id));
-      socket.once('close', () => this.emit('disconnect', {connection, id: connection.id}));
+      socket.once('close', () => {
+        this.emit('disconnect', {connection, id: connection.id, newConnectionCount: Object.keys(this.connections).length});
+      })
+      
+      this.emit('connect', {connection, id: connection.id, newConnectionCount: Object.keys(this.connections).length});
 
       const greeting = this._greeting || [];
       const features = this._features || 'Ready';
       return connection.reply(220, ...greeting, features)
-        .finally(() => socket.resume());
+        .then(() => socket.resume());
     };
     const serverOptions = Object.assign({}, this.isTLS ? this.options.tls : {}, {pauseOnConnect: true});
 
     this.server = (this.isTLS ? tls : net).createServer(serverOptions, serverConnectionHandler);
-    this.server.on('error', (err) => this.log.error(err, '[Event] error'));
-
+    this.server.on('error', (err) => {
+      this.log.error(err, '[Event] error');
+      this.emit('server-error', {error: err});
+    });
+    
     const quit = _.debounce(this.quit.bind(this), 100);
 
-    process.on('SIGTERM', quit);
-    process.on('SIGINT', quit);
-    process.on('SIGQUIT', quit);
+    if (this.options.endOnProcessSignal) {
+      process.on('SIGTERM', quit);
+      process.on('SIGINT', quit);
+      process.on('SIGQUIT', quit);
+    }
   }
 
   get isTLS() {
@@ -123,7 +133,7 @@ class FtpServer extends EventEmitter {
       delete this.connections[id];
 
       setTimeout(() => {
-        reject('Timed out disconnecting client')
+        reject(new Error('Timed out disconnecting the client'))
       }, this.options.timeout || 1000)
 
       try {
@@ -138,11 +148,12 @@ class FtpServer extends EventEmitter {
 
   quit() {
     return this.close()
-    .finally(() => process.exit(0));
+    .then(() => process.exit(0));
   }
 
   close() {
     this.server.maxConnections = 0;
+    this.emit('closing');
     this.log.info('Closing connections:', Object.keys(this.connections).length);
 
     return Promise.all(Object.keys(this.connections).map((id) => this.disconnectClient(id)))
@@ -155,6 +166,7 @@ class FtpServer extends EventEmitter {
     }))
     .then(() => {
       this.log.debug('Removing event listeners...')
+      this.emit('closed', {});
       this.removeAllListeners();
       return;
     });
